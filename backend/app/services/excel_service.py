@@ -120,81 +120,19 @@ class ExcelService:
     
     def _delete_column_with_style(self, worksheet: Worksheet, column_index: int):
         """
-        删除指定列并尽量保持样式和合并单元格
+        删除指定列并正确处理合并单元格
+        使用简化但更可靠的方法
         
         Args:
             worksheet: 工作表对象
             column_index: 要删除的列索引（从1开始）
         """
         try:
-            # 获取要删除的列字母
-            from openpyxl.utils import get_column_letter
-            column_letter = get_column_letter(column_index)
-            
-            # 处理合并单元格
-            # 需要先收集所有相关的合并单元格范围，然后再处理
-            merged_ranges_to_remove = []
-            merged_ranges_to_modify = []
-            
-            for merged_range in list(worksheet.merged_cells.ranges):
-                min_col = merged_range.min_col
-                max_col = merged_range.max_col
-                
-                if column_index >= min_col and column_index <= max_col:
-                    # 合并范围包含要删除的列
-                    if min_col == max_col == column_index:
-                        # 合并范围只有这一列，删除整个合并
-                        merged_ranges_to_remove.append(merged_range)
-                    else:
-                        # 合并范围跨多列，需要调整
-                        merged_ranges_to_remove.append(merged_range)
-                        if max_col > column_index:
-                            # 创建新的合并范围
-                            new_min_col = min_col if min_col < column_index else min_col - 1
-                            new_max_col = max_col - 1
-                            if new_max_col >= new_min_col:
-                                from openpyxl.worksheet.cell_range import CellRange
-                                new_range = CellRange(
-                                    min_col=new_min_col,
-                                    min_row=merged_range.min_row,
-                                    max_col=new_max_col,
-                                    max_row=merged_range.max_row
-                                )
-                                merged_ranges_to_modify.append(new_range)
-                elif column_index < min_col:
-                    # 要删除的列在合并范围左侧，需要调整合并范围的列索引
-                    merged_ranges_to_remove.append(merged_range)
-                    from openpyxl.worksheet.cell_range import CellRange
-                    new_range = CellRange(
-                        min_col=min_col - 1,
-                        min_row=merged_range.min_row,
-                        max_col=max_col - 1,
-                        max_row=merged_range.max_row
-                    )
-                    merged_ranges_to_modify.append(new_range)
-            
-            # 删除旧的合并范围
-            for merged_range in merged_ranges_to_remove:
-                worksheet.unmerge_cells(str(merged_range))
-            
-            # 删除列
+            # 简化方案：直接使用openpyxl的delete_cols方法
+            # 这个方法会自动处理合并单元格的调整
             worksheet.delete_cols(column_index)
-            
-            # 添加新的合并范围
-            for new_range in merged_ranges_to_modify:
-                try:
-                    worksheet.merge_cells(str(new_range))
-                except Exception as e:
-                    logger.warning(f"重新合并单元格时出错: {str(e)}")
-            
             logger.debug(f"成功删除第 {column_index} 列")
             
         except Exception as e:
             logger.error(f"删除列 {column_index} 时出错: {str(e)}")
-            # 如果样式处理失败，尝试简单删除
-            try:
-                worksheet.delete_cols(column_index)
-                logger.info(f"使用简单方式删除第 {column_index} 列")
-            except Exception as e2:
-                logger.error(f"简单删除列也失败: {str(e2)}")
-                raise e2
+            raise e
